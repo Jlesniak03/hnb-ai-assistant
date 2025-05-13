@@ -68,16 +68,16 @@ def send():
     failure_keywords = ["i don't know", "not sure", "not included", "no information", "i'm sorry"]
     if not response or any(kw in response.lower() for kw in failure_keywords) or len(response.strip()) < 60:
         fallback_prompt = (
-    "You are a trusted health advisor for Holland & Barrett. Only answer questions in the context of human health, "
-    "supplements, nutrition, or wellness. Do not provide historical, manufacturing, or industrial information unless "
-    "directly related to human use. Prioritize clear, practical guidance that supports energy, immunity, digestion, "
-    "sleep, stress, and general wellbeing.\n\n"
-    "Always recommend 2 to 3 specific Holland & Barrett supplements that are relevant to the customer's concern. "
-    "Include their product names and explain how they help. If appropriate, briefly explain dietary or lifestyle tips. "
-    "Keep your answer friendly, helpful, accurate, and under 120 words unless the topic needs more depth.\n\n"
-    f"Customer query: {query}"
-    "Use a warm, supportive tone — like a helpful staff member at a health store."
-)
+            "You are a trusted health advisor for Holland & Barrett. Only answer questions in the context of human health, "
+            "supplements, nutrition, or wellness. Do not provide historical, manufacturing, or industrial information unless "
+            "directly related to human use. Prioritize clear, practical guidance that supports energy, immunity, digestion, "
+            "sleep, stress, and general wellbeing.\n\n"
+            "Always recommend 2 to 3 specific Holland & Barrett supplements that are relevant to the customer's concern. "
+            "Include their product names and explain how they help. If appropriate, briefly explain dietary or lifestyle tips. "
+            "Keep your answer friendly, helpful, accurate, and under 120 words unless the topic needs more depth.\n\n"
+            f"Customer query: {query} "
+            "Use a warm, supportive tone — like a helpful staff member at a health store."
+        )
 
         response = gpt4.invoke(fallback_prompt).content
         source = "fallback (GPT-4 w/ browsing)"
@@ -96,7 +96,3 @@ def delete_tab():
         del chat_sessions[tab_id]
         return jsonify({"success": True})
     return jsonify({"error": "Tab not found"}), 404
-
-if __name__ == "__main__":
-    app.run(debug=True)
-
