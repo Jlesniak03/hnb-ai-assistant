@@ -9,7 +9,9 @@ from langchain_core.vectorstores import VectorStoreRetriever
 from langchain.chains import RetrievalQA
 
 # Load environment variables
-load_dotenv()
+if os.environ.get("RENDER") != "true":
+    load_dotenv()
+
 
 app = Flask(__name__)
 
@@ -37,12 +39,20 @@ def cleanup_sessions():
     for k in to_delete:
         del chat_sessions[k]
 
+# Kill switch helper
+def kill_switch_active():
+    # Prefer environment variable set on platform (e.g., Render) rather than .env
+    return os.environ.get("KILL_SWITCH", "off").lower() == "on"
+
 @app.route("/")
 def index():
     return render_template("index.html")
 
 @app.route("/send", methods=["POST"])
 def send():
+    if kill_switch_active():
+        return jsonify({"error": "Service is temporarily disabled by the administrator."}), 503
+
     cleanup_sessions()
     data = request.get_json()
     tab_id = data.get("tab_id")
@@ -96,3 +106,19 @@ def delete_tab():
         del chat_sessions[tab_id]
         return jsonify({"success": True})
     return jsonify({"error": "Tab not found"}), 404
+
+@app.route("/admin/toggle_kill", methods=["POST"])
+def toggle_kill_switch():
+    new_value = request.get_json().get("status")
+    if new_value not in ["on", "off"]:
+        return jsonify({"error": "Invalid status. Use 'on' or 'off'."}), 400
+
+    os.environ["KILL_SWITCH"] = new_value  # Only affects runtime, not Render
+    return jsonify({"message": f"Kill switch set to '{new_value}' (only during runtime, not persistent)."})
+
+@app.route("/debug_kill")
+def debug_kill():
+    return jsonify({
+        "KILL_SWITCH": os.environ.get("KILL_SWITCH"),
+        "kill_switch_active": kill_switch_active()
+    })
