@@ -1,144 +1,121 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from dotenv import load_dotenv
-from datetime import datetime, timedelta
-import os
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 40px;
+        }
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.vectorstores import VectorStoreRetriever
-from langchain.chains import RetrievalQA
+        .dashboard-box {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            max-width: 700px;
+            margin: auto;
+        }
 
-# Load environment variables
-if os.environ.get("RENDER") != "true":
-    load_dotenv()
+        h1 {
+            font-weight: bold;
+            margin-bottom: 30px;
+        }
 
-app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_secret")  # Replace fallback_secret in prod
+        label {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
 
-# Session memory
-chat_sessions = {}
+        select.form-select {
+            border-radius: 10px;
+            padding: 12px;
+        }
 
-# Load vectorstores once
-product_db = FAISS.load_local("vectorstore/products_faiss", OpenAIEmbeddings(), allow_dangerous_deserialization=True)
-ailment_db = FAISS.load_local("vectorstore/ailments_faiss", OpenAIEmbeddings(), allow_dangerous_deserialization=True)
+        .btn-update {
+            background-color: #ffc107;
+            color: black;
+            border-radius: 10px;
+            padding: 10px 20px;
+            margin-top: 20px;
+        }
 
-# QA chains
-product_qa = RetrievalQA.from_chain_type(llm=ChatOpenAI(model="gpt-4", temperature=0), retriever=VectorStoreRetriever(vectorstore=product_db))
-ailment_qa = RetrievalQA.from_chain_type(llm=ChatOpenAI(model="gpt-4", temperature=0), retriever=VectorStoreRetriever(vectorstore=ailment_db))
-gpt4 = ChatOpenAI(model="gpt-4", temperature=0)
+        .btn-update:hover {
+            background-color: #e0a800;
+        }
 
-# Ailment keyword detection
-def is_ailment_question(query):
-    keywords = ["help with", "feel", "pain", "tired", "symptoms", "treatment", "relief", "issue", "condition"]
-    return any(word in query.lower() for word in keywords)
+        .btn-logout {
+            background-color: #dc3545;
+            color: white;
+            border-radius: 10px;
+            padding: 10px 20px;
+            margin-top: 30px;
+        }
 
-# Cleanup old sessions
-def cleanup_sessions():
-    now = datetime.utcnow()
-    to_delete = [k for k, v in chat_sessions.items() if now - v["last_active"] > timedelta(hours=2)]
-    for k in to_delete:
-        del chat_sessions[k]
+        .btn-logout:hover {
+            background-color: #bb2d3b;
+        }
 
-# Kill switch helper
-def kill_switch_active():
-    return os.environ.get("KILL_SWITCH", "off").lower() == "on"
+        .home-link {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            font-weight: 500;
+            text-decoration: none;
+            color: #198754;
+            font-size: 15px;
+        }
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+        .home-link:hover {
+            text-decoration: underline;
+        }
 
-@app.route("/send", methods=["POST"])
-def send():
-    if kill_switch_active():
-        return jsonify({"error": "Service is temporarily disabled by the administrator."}), 503
+        hr {
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
 
-    cleanup_sessions()
-    data = request.get_json()
-    tab_id = data.get("tab_id")
-    query = data.get("query", "").strip()
+    <div class="dashboard-box">
+        <h1>Admin Dashboard</h1>
+        <form id="kill-switch-form">
+            <div class="mb-3">
+                <label for="kill-switch" class="form-label">Kill Switch:</label>
+                <select class="form-select" id="kill-switch">
+                    <option value="off" {% if kill_status == "off" %}selected{% endif %}>Off</option>
+                    <option value="on" {% if kill_status == "on" %}selected{% endif %}>On</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-update">Update</button>
+        </form>
 
-    if not query or not tab_id:
-        return jsonify({"error": "Missing tab_id or query"}), 400
+        <hr>
 
-    if tab_id not in chat_sessions:
-        chat_sessions[tab_id] = {"messages": [], "last_active": datetime.utcnow()}
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-logout">Logout</a>
+    </div>
 
-    session_data = chat_sessions[tab_id]
-    session_data["last_active"] = datetime.utcnow()
-    session_data["messages"].append({"role": "user", "content": query})
+    <a href="/" class="home-link">&larr; Home</a>
 
-    if is_ailment_question(query):
-        response = ailment_qa.run(query)
-        source = "internal (ailments)"
-    else:
-        response = product_qa.run(query)
-        source = "internal (products)"
+    <script>
+        document.getElementById("kill-switch-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            const status = document.getElementById("kill-switch").value;
 
-    failure_keywords = ["i don't know", "not sure", "not included", "no information", "i'm sorry"]
-    if not response or any(kw in response.lower() for kw in failure_keywords) or len(response.strip()) < 60:
-        fallback_prompt = (
-            "You are a trusted health advisor for Holland & Barrett. Only answer questions in the context of human health, "
-            "supplements, nutrition, or wellness. Do not provide historical, manufacturing, or industrial information unless "
-            "directly related to human use. Prioritize clear, practical guidance that supports energy, immunity, digestion, "
-            "sleep, stress, and general wellbeing.\n\n"
-            "Always recommend 2 to 3 specific Holland & Barrett supplements that are relevant to the customer's concern. "
-            "Include their product names and explain how they help. If appropriate, briefly explain dietary or lifestyle tips. "
-            "Keep your answer friendly, helpful, accurate, and under 120 words unless the topic needs more depth.\n\n"
-            f"Customer query: {query} "
-            "Use a warm, supportive tone — like a helpful staff member at a health store."
-        )
+            fetch("/admin/toggle_kill", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: status })
+            })
+            .then(response => response.json())
+            .then(data => alert(data.message))
+            .catch(err => alert("Something went wrong."));
+        });
+    </script>
 
-        response = gpt4.invoke(fallback_prompt).content
-        source = "fallback (GPT-4 w/ browsing)"
-
-    session_data["messages"].append({"role": "assistant", "content": f"{response}\n\n🔍 Source: {source}"})
-    return jsonify({
-        "response": response,
-        "source": source,
-        "messages": session_data["messages"]
-    })
-
-@app.route("/delete_tab", methods=["POST"])
-def delete_tab():
-    tab_id = request.get_json().get("tab_id")
-    if tab_id and tab_id in chat_sessions:
-        del chat_sessions[tab_id]
-        return jsonify({"success": True})
-    return jsonify({"error": "Tab not found"}), 404
-
-@app.route("/admin/toggle_kill", methods=["POST"])
-def toggle_kill_switch():
-    new_value = request.get_json().get("status")
-    if new_value not in ["on", "off"]:
-        return jsonify({"error": "Invalid status. Use 'on' or 'off'."}), 400
-
-    os.environ["KILL_SWITCH"] = new_value  # Only affects runtime
-    return jsonify({"message": f"Kill switch set to '{new_value}' (runtime only)"})
-
-@app.route("/debug_kill")
-def debug_kill():
-    return jsonify({
-        "KILL_SWITCH": os.environ.get("KILL_SWITCH"),
-        "kill_switch_active": kill_switch_active()
-    })
-
-@app.route("/admin/login", methods=["GET", "POST"])
-def admin_login():
-    if request.method == "POST":
-        password = request.form.get("password")
-        if password == os.getenv("ADMIN_PASSWORD"):
-            session["admin_authenticated"] = True
-            return redirect(url_for("admin_dashboard"))
-        return render_template("admin_login.html", error="Incorrect password")
-    return render_template("admin_login.html")
-
-@app.route("/admin/dashboard")
-def admin_dashboard():
-    if not session.get("admin_authenticated"):
-        return redirect(url_for("admin_login"))
-    return render_template("admin_dashboard.html")
-
-@app.route("/admin/logout")
-def admin_logout():
-    session.clear()
-    return redirect(url_for("admin_login"))
+</body>
+</html>

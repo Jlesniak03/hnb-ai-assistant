@@ -126,6 +126,8 @@ def debug_kill():
 def admin_login():
     if request.method == "POST":
         password = request.form.get("password")
+        print("Entered:", password)  # DEBUG line
+        print("Expected:", os.getenv("ADMIN_PASSWORD"))  # DEBUG line
         if password == os.getenv("ADMIN_PASSWORD"):
             session["admin_authenticated"] = True
             return redirect(url_for("admin_dashboard"))
@@ -142,3 +144,6 @@ def admin_dashboard():
 def admin_logout():
     session.clear()
     return redirect(url_for("admin_login"))
+
+if __name__ == "__main__":
+    app.run(debug=True)

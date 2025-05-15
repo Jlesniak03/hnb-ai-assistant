@@ -109,6 +109,22 @@
       <button class="btn btn-sm btn-outline-success mt-3 w-100" onclick="newChat()">+ New Chat</button>
     </div>
 
+<a href="{{ url_for('admin_login') }}" style="
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background-color: #1f7a1f;
+    color: white;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: bold;
+    text-decoration: none;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+    transition: background-color 0.2s ease;
+" onmouseover="this.style.backgroundColor='#166316'" onmouseout="this.style.backgroundColor='#1f7a1f'">
+    Admin Login
+</a>
+
     <div class="chat-main">
       <div id="chatHistory"></div>
       <form onsubmit="sendMessage(event)">
